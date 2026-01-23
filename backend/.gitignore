@@ -1,0 +1,46 @@
+# ========================
+# PYTHON & POETRY
+# ========================
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+poetry.lock
+# Nota: Alguns preferem commitar o poetry.lock, outros não. 
+# Se quiser garantir versões exatas no servidor, remova a linha acima.
+
+# ========================
+# DJANGO CORE
+# ========================
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# ========================
+# SEGURANÇA (CRÍTICO)
+# ========================
+.env
+.env.local
+.DS_Store
+
+# ========================
+# ARQUIVOS DE MÍDIA E ESTATICOS
+# ========================
+# Ignora arquivos gerados (collectstatic)
+staticfiles/
+/static_root/
+
+# Ignora uploads de usuários (comprovantes), mas mantém a pasta media
+media/
+!media/.gitkeep
+
+# Se a pasta 'comprovantes' estiver na raiz ou em outro lugar:
+comprovantes/
+
+# ========================
+# IDE & SISTEMA
+# ========================
+.vscode/
+.idea/
+Thumbs.db
