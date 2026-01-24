@@ -74,3 +74,72 @@ Esta opção sobe o Backend e o Frontend simultaneamente em containers isolados.
    ```bash
    git clone [https://github.com/seu-usuario/demolay-treasury.git](https://github.com/seu-usuario/demolay-treasury.git)
    cd demolay-treasury
+Suba os containers:
+
+Bash
+docker-compose up --build
+Acesse:
+
+Frontend: http://localhost:3000
+
+Backend API: http://localhost:8000/api/
+
+🔧 Opção 2: Rodando Manualmente
+1. Backend (Django)
+Bash
+cd backend
+# Instalar dependências
+poetry install
+poetry shell
+
+# Migrar banco de dados
+python manage.py makemigrations
+python manage.py migrate
+
+# Criar superusuário (Admin)
+python manage.py createsuperuser
+
+# Rodar servidor
+python manage.py runserver
+2. Frontend (Next.js)
+Bash
+cd frontend
+# Instalar dependências
+npm install
+
+# Rodar servidor de desenvolvimento
+npm run dev
+📄 Estrutura do Projeto
+demolay-treasury/
+├── backend/                # API Django
+│   ├── core/               # Configurações do projeto (settings, urls)
+│   ├── financeiro/         # App principal (Models, Views, Reports)
+│   ├── Dockerfile          # Configuração do Container Backend
+│   └── pyproject.toml      # Dependências Python
+│
+├── frontend/               # Interface Next.js
+│   ├── src/
+│   │   ├── app/            # Páginas (Dashboard)
+│   │   ├── components/     # Modais, Gráficos, Login
+│   │   └── services/       # Configuração da API (Axios)
+│   ├── public/             # Imagens e Logos
+│   └── Dockerfile          # Configuração do Container Frontend
+│
+└── docker-compose.yml      # Orquestração dos containers
+🤝 Contribuição
+Este é um projeto interno para o Capítulo 29. Para contribuir:
+
+Faça um Fork do projeto.
+
+Crie uma Branch para sua Feature (git checkout -b feature/NovaFeature).
+
+Commit suas mudanças (git commit -m 'Add: Nova Feature').
+
+Push para a Branch (git push origin feature/NovaFeature).
+
+Abra um Pull Request.
+
+📝 Licença
+Desenvolvido exclusivamente para uso da Ordem DeMolay - Capítulo Unidos da Esperança nº 29. Todos os direitos reservados.
+
+<div align="center"> <sub>Desenvolvido por <strong>Luiz Fernando da Silva Guedes</strong></sub>
