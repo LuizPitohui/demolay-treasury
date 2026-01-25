@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import api from '@/services/api';
-import { X, Terminal, Download, RefreshCw } from 'lucide-react';
+import { X, Terminal, Download, RefreshCw, Loader2 } from 'lucide-react';
 
 interface LogsModalProps {
   isOpen: boolean;
@@ -12,13 +12,14 @@ interface LogItem {
   id: number;
   usuario_nome: string;
   acao: string;
-  data_criacao: string; // Já vem formatada do Django (Ex: "23/01/2026 15:30:00")
+  data_criacao: string;
   ip_address: string;
 }
 
 export default function LogsModal({ isOpen, onClose }: LogsModalProps) {
   const [logs, setLogs] = useState<LogItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState(false); // NOVO: Estado para download
   
   // Estados para filtro de data
   const dataHoje = new Date();
@@ -41,9 +42,30 @@ export default function LogsModal({ isOpen, onClose }: LogsModalProps) {
     if (isOpen) fetchLogs();
   }, [isOpen]);
 
-  const handleDownload = () => {
-    const baseURL = api.defaults.baseURL || 'http://127.0.0.1:8000/api';
-    window.open(`${baseURL}/logs/pdf/?mes=${mes}&ano=${ano}`, '_blank');
+  // CORREÇÃO: Download via Blob com Token
+  const handleDownload = async () => {
+    setDownloading(true);
+    try {
+      const response = await api.get(`/logs/pdf/?mes=${mes}&ano=${ano}`, {
+        responseType: 'blob',
+      });
+
+      const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.setAttribute('download', `Auditoria_${mes}-${ano}.pdf`);
+      
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(blobUrl);
+
+    } catch (error) {
+      console.error(error);
+      alert('Erro ao exportar logs.');
+    } finally {
+      setDownloading(false);
+    }
   };
 
   if (!isOpen) return null;
@@ -71,8 +93,17 @@ export default function LogsModal({ isOpen, onClose }: LogsModalProps) {
                 <option value={2026}>2026</option>
             </select>
 
-            <button onClick={handleDownload} className="flex items-center gap-2 px-3 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded text-emerald-400 text-xs transition-all">
-                <Download className="w-3 h-3" /> EXPORT PDF
+            <button 
+                onClick={handleDownload} 
+                disabled={downloading}
+                className="flex items-center gap-2 px-3 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded text-emerald-400 text-xs transition-all disabled:opacity-50"
+            >
+                {downloading ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                    <Download className="w-3 h-3" />
+                )}
+                EXPORT PDF
             </button>
             <button onClick={onClose} className="text-emerald-700 hover:text-emerald-400 transition-colors">
               <X className="w-5 h-5" />
@@ -101,7 +132,6 @@ export default function LogsModal({ isOpen, onClose }: LogsModalProps) {
                 {logs.map((log) => (
                   <tr key={log.id} className="hover:bg-emerald-500/5 transition-colors">
                     <td className="py-2 font-mono opacity-70">
-                        {/* CORREÇÃO: Usamos direto a string que vem do backend */}
                         {log.data_criacao}
                     </td>
                     <td className="py-2 font-bold text-emerald-300">{log.usuario_nome}</td>

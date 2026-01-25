@@ -10,6 +10,9 @@ import NewTransactionModal from '@/components/NewTransactionModal';
 import ReportModal from '@/components/ReportModal'; 
 import ServerStatus from '@/components/ServerStatus'; // <--- Status do Servidor
 import LogsModal from '@/components/LogsModal';       // <--- Modal de Logs
+import Link from 'next/link'; // <--- Importante para navegar
+import { Users } from 'lucide-react'; // <--- Ícone de usuários
+import { Settings } from 'lucide-react'; // <--- Ícone de configurações
 
 import { 
   Wallet, TrendingUp, TrendingDown, Activity, RefreshCw, 
@@ -72,8 +75,61 @@ export default function Dashboard() {
       })
       .finally(() => setLoading(false));
   };
+  // ===========================================================================
+  // 5. FUNÇÕES DE DOWNLOAD SEGURO (ADICIONE ISSO)
+  // ===========================================================================
+  
+  const downloadArquivoSeguro = async (url: string, nomeArquivo: string) => {
+    try {
+      // Usa o 'api' que já tem o Header Authorization configurado
+      const response = await api.get(url, {
+        responseType: 'blob', // Importante: trata como arquivo binário
+      });
+
+      // Cria um link temporário no navegador
+      const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.setAttribute('download', nomeArquivo);
+      
+      // Clica e remove
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(blobUrl);
+
+    } catch (error) {
+      console.error("Erro no download:", error);
+      alert("Erro ao baixar. Verifique se sua sessão expirou.");
+    }
+  };
+
+  const handleDownloadRelatorioMensal = () => {
+    const data = new Date();
+    const mes = data.getMonth() + 1; // Javascript começa mês em 0
+    const ano = data.getFullYear();
+    
+    // Chama a rota passando o Token corretamente via axios
+    downloadArquivoSeguro(
+      `/relatorio/pdf/?mes=${mes}&ano=${ano}`, 
+      `Balancete_${mes}-${ano}.pdf`
+    );
+  };
+
+  const handleDownloadLogs = () => {
+    const data = new Date();
+    const mes = data.getMonth() + 1;
+    const ano = data.getFullYear();
+
+    downloadArquivoSeguro(
+      `/logs/pdf/?mes=${mes}&ano=${ano}`, 
+      `Auditoria_${mes}-${ano}.pdf`
+    );
+  };
 
   const COLORS = ['#3b82f6', '#10b981', '#f43f5e', '#a855f7', '#f59e0b'];
+
+  
 
   // --- RENDERIZAÇÃO ---
 
@@ -117,6 +173,16 @@ export default function Dashboard() {
         {/* Barra de Ferramentas */}
         <div className="flex flex-wrap items-center gap-3">
           
+          {/* NOVO BOTÃO DE MEMBROS */}
+          <Link href="/membros">
+            <button className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-white font-bold text-sm shadow-[0_0_20px_rgba(79,70,229,0.3)] transition-all active:scale-95 border border-indigo-400/20 group">
+              <Users className="w-4 h-4" />
+              MEMBROS
+            </button>
+          </Link>
+
+          {/* NOVO BOTÃO DE TRANSAÇÕES */}
+          
           <button 
             onClick={() => setIsModalOpen(true)}
             className="flex items-center gap-2 px-5 py-2.5 bg-purple-600 hover:bg-purple-500 rounded-xl text-white font-bold text-sm shadow-[0_0_20px_rgba(147,51,234,0.3)] transition-all active:scale-95 border border-purple-400/20 group"
@@ -159,6 +225,15 @@ export default function Dashboard() {
           >
             <LogOut className="w-5 h-5" />
           </button>
+
+          {/* --- NOVO BOTÃO DE CONFIGURAÇÕES --- */}
+            <Link href="/settings">
+              <button className="flex items-center gap-2 px-5 py-2.5 bg-slate-700 hover:bg-slate-600 rounded-xl text-white font-bold text-sm shadow-[0_0_20px_rgba(100,116,139,0.3)] transition-all active:scale-95 border border-slate-500/20 group">
+                {/* A engrenagem gira quando passa o mouse (group-hover:rotate-90) */}
+                <Settings className="w-4 h-4 group-hover:rotate-90 transition-transform duration-500" />
+                CONFIG
+              </button>
+            </Link>
         </div>
       </header>
 

@@ -5,10 +5,21 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
 from django.http import HttpResponse
 from django.db.models import Sum
-from .models import Transacao, LogSistema
+# ADICIONADO: Import do Model Configuracao
+from .models import Transacao, LogSistema, Configuracao 
 from datetime import datetime, date
 import os
 import calendar
+
+def get_nome_capitulo():
+    """Função auxiliar para pegar o nome do capítulo ou um fallback seguro."""
+    try:
+        config = Configuracao.objects.first()
+        if config:
+            return config.nome_capitulo
+        return "Capítulo DeMolay (Nome Não Configurado)"
+    except:
+        return "Capítulo DeMolay"
 
 def gerar_relatorio_mensal(request):
     # 1. Detectar Mês e Ano (Da URL ou Atual)
@@ -24,8 +35,9 @@ def gerar_relatorio_mensal(request):
     ultimo_dia = calendar.monthrange(ano_ref, mes_ref)[1]
     data_fim = date(ano_ref, mes_ref, ultimo_dia)
 
-    nome_mes = data_inicio.strftime("%B").capitalize() # Ex: Janeiro
-    
+    # Busca o nome dinâmico
+    nome_capitulo = get_nome_capitulo()
+
     # 2. Configurar PDF
     response = HttpResponse(content_type='application/pdf')
     filename = f"Balancete_{mes_ref:02d}-{ano_ref}.pdf"
@@ -54,7 +66,8 @@ def gerar_relatorio_mensal(request):
         elements.append(im)
         elements.append(Spacer(1, 0.5*cm))
 
-    elements.append(Paragraph("Capítulo Unidos da Esperança nº 29", ParagraphStyle('Title', parent=styles['Heading1'], alignment=1, textColor=colors.darkblue)))
+    # USANDO O NOME DINÂMICO AQUI
+    elements.append(Paragraph(nome_capitulo, ParagraphStyle('Title', parent=styles['Heading1'], alignment=1, textColor=colors.darkblue)))
     elements.append(Paragraph(f"Balancete Mensal: {mes_ref:02d}/{ano_ref}", ParagraphStyle('Sub', parent=styles['Heading2'], alignment=1, fontSize=12)))
     elements.append(Spacer(1, 0.5*cm))
 
@@ -115,21 +128,21 @@ def gerar_relatorio_mensal(request):
     elements.append(p_resumo)
 
     # --- ASSINATURAS (TESOUREIRO E MESTRE CONSELHEIRO) ---
-    elements.append(Spacer(1, 3*cm)) # Espaço maior para assinar
+    elements.append(Spacer(1, 3*cm)) 
 
-    # Criamos uma tabela invisível para alinhar lado a lado
+    # USANDO O NOME DINÂMICO NAS ASSINATURAS
     assinaturas_data = [
         ["_______________________________", "_______________________________"],
         ["TESOUREIRO", "MESTRE CONSELHEIRO"],
-        ["Cap. Unidos da Esperança nº 29", "Cap. Unidos da Esperança nº 29"]
+        [nome_capitulo, nome_capitulo]
     ]
 
     ass_table = Table(assinaturas_data, colWidths=[8.5*cm, 8.5*cm])
     ass_table.setStyle(TableStyle([
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('FONTNAME', (0, 1), (-1, 1), 'Helvetica-Bold'), # Negrito nos cargos
+        ('FONTNAME', (0, 1), (-1, 1), 'Helvetica-Bold'),
         ('FONTSIZE', (0, 1), (-1, -1), 10),
-        ('TOPPADDING', (0, 1), (-1, -1), 5), # Espaço entre linha e texto
+        ('TOPPADDING', (0, 1), (-1, -1), 5),
         ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
     ]))
     
@@ -146,6 +159,9 @@ def gerar_relatorio_logs(request):
     except ValueError:
         mes_ref = datetime.now().month
         ano_ref = datetime.now().year
+    
+    # Busca Nome Dinâmico
+    nome_capitulo = get_nome_capitulo()
 
     # 2. Configuração do Nome do Arquivo
     data_arquivo = datetime.now().strftime('%d-%m-%Y')
@@ -163,7 +179,7 @@ def gerar_relatorio_logs(request):
         'ChapterTitle',
         parent=styles['Heading1'],
         fontSize=16,
-        alignment=1, # Centralizado
+        alignment=1, 
         textColor=colors.black,
         fontName='Times-Bold',
         spaceAfter=2
@@ -183,7 +199,7 @@ def gerar_relatorio_logs(request):
         'ReportTitle',
         parent=styles['Heading2'],
         fontSize=14,
-        alignment=0, # Esquerda
+        alignment=0,
         textColor=colors.navy,
         fontName='Helvetica-Bold',
         spaceBefore=20,
@@ -210,7 +226,8 @@ def gerar_relatorio_logs(request):
         elements.append(im)
         elements.append(Spacer(1, 0.5*cm))
 
-    elements.append(Paragraph("CAPÍTULO UNIDOS DA ESPERANÇA Nº 29", style_chapter))
+    # USANDO NOME DINÂMICO (EM MAIÚSCULO)
+    elements.append(Paragraph(nome_capitulo.upper(), style_chapter))
     elements.append(Paragraph("ORDEM DEMOLAY - ESTADO DO AMAZONAS", style_sub))
     elements.append(Spacer(1, 0.5*cm))
 
@@ -272,17 +289,17 @@ def gerar_relatorio_logs(request):
     # --- ASSINATURAS (TESOUREIRO E MESTRE CONSELHEIRO) ---
     elements.append(Spacer(1, 2.5*cm))
 
-    # Tabela invisível para assinaturas lado a lado
+    # USANDO NOME DINÂMICO
     assinaturas_data = [
         ["_______________________________", "_______________________________"],
         ["TESOUREIRO", "MESTRE CONSELHEIRO"],
-        ["Cap. Unidos da Esperança nº 29", "Cap. Unidos da Esperança nº 29"]
+        [nome_capitulo, nome_capitulo]
     ]
 
     ass_table = Table(assinaturas_data, colWidths=[9*cm, 9*cm])
     ass_table.setStyle(TableStyle([
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('FONTNAME', (0, 1), (-1, 1), 'Helvetica-Bold'), # Negrito apenas na linha dos cargos
+        ('FONTNAME', (0, 1), (-1, 1), 'Helvetica-Bold'), 
         ('FONTSIZE', (0, 1), (-1, -1), 9),
         ('TOPPADDING', (0, 1), (-1, -1), 5),
     ]))

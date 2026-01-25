@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import api from '@/services/api'; // Para pegar a URL base
-import { X, FileText, Calendar, Download } from 'lucide-react';
+import api from '@/services/api'; 
+import { X, FileText, Download, Loader2 } from 'lucide-react'; // Adicionei Loader2
 
 interface ModalProps {
   isOpen: boolean;
@@ -11,8 +11,9 @@ interface ModalProps {
 
 export default function ReportModal({ isOpen, onClose }: ModalProps) {
   const dataAtual = new Date();
-  const [mes, setMes] = useState(dataAtual.getMonth() + 1); // JS começa mês em 0
+  const [mes, setMes] = useState(dataAtual.getMonth() + 1);
   const [ano, setAno] = useState(dataAtual.getFullYear());
+  const [loading, setLoading] = useState(false); // NOVO: Estado de loading
 
   if (!isOpen) return null;
 
@@ -23,16 +24,34 @@ export default function ReportModal({ isOpen, onClose }: ModalProps) {
     { v: 10, n: 'Outubro' }, { v: 11, n: 'Novembro' }, { v: 12, n: 'Dezembro' }
   ];
 
-  const anos = [2025, 2026, 2027]; // Adicione mais se precisar
+  const anos = [2025, 2026, 2027];
 
-  const handleDownload = () => {
-    // Monta a URL manualmente para abrir em nova aba
-    // A baseURL do axios geralmente é http://127.0.0.1:8000/api
-    const baseURL = api.defaults.baseURL || 'http://127.0.0.1:8000/api';
-    const url = `${baseURL}/relatorio/pdf/?mes=${mes}&ano=${ano}`;
-    
-    window.open(url, '_blank'); // Abre o PDF numa nova aba
-    onClose();
+  const handleDownload = async () => {
+    setLoading(true);
+    try {
+      // 1. Usa o axios (api) que já tem o Token configurado
+      const response = await api.get(`/relatorio/pdf/?mes=${mes}&ano=${ano}`, {
+        responseType: 'blob', // Importante: Diz que é um arquivo binário
+      });
+
+      // 2. Cria o link invisível para download
+      const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.setAttribute('download', `Balancete_${mes.toString().padStart(2, '0')}-${ano}.pdf`);
+      
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(blobUrl);
+
+      onClose();
+    } catch (error) {
+      console.error(error);
+      alert('Erro ao baixar o relatório. Verifique sua conexão ou login.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -89,10 +108,18 @@ export default function ReportModal({ isOpen, onClose }: ModalProps) {
 
           <button
             onClick={handleDownload}
-            className="w-full mt-4 py-3 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-500 shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2 active:scale-95"
+            disabled={loading}
+            className="w-full mt-4 py-3 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-500 shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed"
           >
-            <Download className="w-4 h-4" />
-            Baixar PDF
+            {loading ? (
+                <>
+                    <Loader2 className="w-4 h-4 animate-spin" /> Gerando PDF...
+                </>
+            ) : (
+                <>
+                    <Download className="w-4 h-4" /> Baixar PDF
+                </>
+            )}
           </button>
         </div>
       </div>

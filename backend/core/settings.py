@@ -17,7 +17,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = config('SECRET_KEY', default='django-insecure-fallback-dev-only')
 
 # Nunca deixe True em produção
-DEBUG = config('DEBUG', default=False, cast=bool)
+DEBUG = config('DEBUG', default=True, cast=bool)
 
 # Lista de hosts permitidos (separados por vírgula no .env)
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='127.0.0.1,localhost', cast=Csv())
@@ -53,9 +53,9 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'financeiro.middleware.AuditMiddleware', # Seu middleware de Logs do Arasaka
+    #'financeiro.middleware.AuditMiddleware', # Seu middleware de Logs do Arasaka
 ]
-
+    
 ROOT_URLCONF = 'core.urls'
 
 TEMPLATES = [
