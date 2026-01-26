@@ -2,53 +2,58 @@ from rest_framework import viewsets, views, permissions, status
 from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes, action
 from django.db.models import Sum
-from django.db.models.functions import TruncMonth
+from django.db.models.functions import TruncMonth, TruncDay, ExtractYear
 from datetime import datetime
+import csv
+import io
 
 # ==============================================================================
-# IMPORTS DOS MODELS E SERIALIZERS
+# IMPORTS DOS PARSERS
 # ==============================================================================
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 
-# Import unificado dos Models (incluindo Configuracao)
+# ==============================================================================
+# IMPORTS DOS MODELS E SERIALIZERS (CORRIGIDO AQUI)
+# ==============================================================================
 from .models import (
     Transacao, 
     LogSistema, 
     Membro, 
     Mensalidade, 
-    Configuracao
+    Configuracao,
+    Evento # <--- FALTAVA IMPORTAR ISSO
 )
 
-# Import dos Serializers (incluindo ConfiguracaoSerializer)
 from .serializers import (
     TransacaoSerializer, 
     LogSistemaSerializer, 
     MembroSerializer,
-    ConfiguracaoSerializer
+    ConfiguracaoSerializer,
+    EventoSerializer # <--- FALTAVA IMPORTAR ISSO
 )
 
-# Import dos Geradores de PDF
-from .reports import gerar_relatorio_mensal, gerar_relatorio_logs
+from .reports import (
+    gerar_relatorio_mensal, 
+    gerar_relatorio_logs,
+    gerar_recibo_mensalidade 
+)
 
 # ==============================================================================
 # 1. VIEW DE STATUS (HEALTH CHECK)
 # ==============================================================================
 class HealthCheckView(views.APIView):
-    """
-    Endpoint leve para o Frontend saber se o Backend está vivo.
-    """
     permission_classes = [permissions.AllowAny]
 
     def get(self, request):
         return Response({
             "status": "online", 
             "server": "Nexus-Arasaka", 
-            "version": "1.3 (Configurações)"
+            "version": "1.5 (Eventos)"
         })
 
 # ==============================================================================
 # 2. TRANSAÇÕES E LOGS (CRUD)
 # ==============================================================================
-
 class TransacaoViewSet(viewsets.ModelViewSet):
     queryset = Transacao.objects.all().order_by('-data_transacao')
     serializer_class = TransacaoSerializer
@@ -61,7 +66,6 @@ class TransacaoViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(tipo=tipo)
         return queryset
 
-    # --- LÓGICA DE AUDITORIA MANUAL (LOGS) ---
     def perform_create(self, serializer):
         instance = serializer.save(responsavel=self.request.user)
         LogSistema.objects.create(
@@ -97,17 +101,14 @@ class LogSistemaViewSet(viewsets.ReadOnlyModelViewSet):
 # ==============================================================================
 # 3. MEMBROS E MENSALIDADES
 # ==============================================================================
-
 class MembroViewSet(viewsets.ModelViewSet):
-    """
-    Gerencia os membros e permite pagar mensalidades via ação personalizada.
-    """
     queryset = Membro.objects.all().order_by('nome')
     serializer_class = MembroSerializer
     permission_classes = [permissions.IsAuthenticated]
+    
+    parser_classes = (MultiPartParser, FormParser, JSONParser)
 
-    # Ação Personalizada: Pagar Mensalidade
-    # Rota: POST /api/membros/{id}/pagar_mensalidade/
+    # --- AÇÃO 1: PAGAR MENSALIDADE ---
     @action(detail=True, methods=['post'])
     def pagar_mensalidade(self, request, pk=None):
         membro = self.get_object()
@@ -116,16 +117,13 @@ class MembroViewSet(viewsets.ModelViewSet):
         try:
             mensalidade = Mensalidade.objects.get(id=mensalidade_id, membro=membro)
             
-            # Validação
             if mensalidade.paga:
                 return Response({"erro": "Esta mensalidade já foi paga."}, status=status.HTTP_400_BAD_REQUEST)
 
-            # 1. Marca a mensalidade como PAGA
             mensalidade.paga = True
             mensalidade.data_pagamento = datetime.now().date()
             mensalidade.save()
 
-            # 2. Cria AUTOMATICAMENTE a Transação no Caixa (Receita)
             Transacao.objects.create(
                 tipo='ENTRADA',
                 valor=mensalidade.valor,
@@ -136,11 +134,9 @@ class MembroViewSet(viewsets.ModelViewSet):
                 forma_pagamento='PIX' 
             )
             
-            # 3. Atualiza o status do membro (Regular/Irregular)
             if hasattr(membro, 'atualizar_status'):
                 membro.atualizar_status()
 
-            # 4. Gera Log de Auditoria
             LogSistema.objects.create(
                 usuario=request.user,
                 acao=f"Recebeu Mensalidade: {membro.nome}",
@@ -151,50 +147,167 @@ class MembroViewSet(viewsets.ModelViewSet):
             return Response({"status": "Pagamento registrado com sucesso!"}, status=status.HTTP_200_OK)
             
         except Mensalidade.DoesNotExist:
-            return Response({"erro": "Mensalidade não encontrada ou não pertence a este membro."}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"erro": "Mensalidade não encontrada."}, status=status.HTTP_404_NOT_FOUND)
+
+    # --- AÇÃO 2: IMPORTAR CSV ---
+    @action(detail=False, methods=['post'], url_path='importar')
+    def importar_csv(self, request):
+        file_obj = request.FILES.get('arquivo')
+        
+        if not file_obj:
+            return Response({"erro": "Nenhum arquivo enviado."}, status=400)
+
+        if not file_obj.name.lower().endswith('.csv'):
+            return Response({"erro": "O arquivo deve ser um CSV."}, status=400)
+
+        try:
+            decoded_file = file_obj.read().decode('utf-8-sig')
+            io_string = io.StringIO(decoded_file)
+            
+            primeira_linha = io_string.readline()
+            io_string.seek(0)
+
+            separador = ';' if ';' in primeira_linha else ','
+            reader = csv.DictReader(io_string, delimiter=separador)
+
+            if reader.fieldnames:
+                reader.fieldnames = [name.strip().upper() for name in reader.fieldnames]
+            else:
+                 return Response({"erro": "O arquivo CSV parece estar vazio."}, status=400)
+            
+            if 'NOME' not in reader.fieldnames or 'ID' not in reader.fieldnames:
+                 return Response({"erro": "Necessário colunas 'NOME' e 'ID'."}, status=400)
+
+            criados = 0
+            atualizados = 0
+
+            for row in reader:
+                nome = row.get('NOME', '').strip()
+                dm_id_str = row.get('ID', '').strip()
+
+                if not nome or not dm_id_str: continue
+                
+                try:
+                    dm_id = int(dm_id_str)
+                except ValueError:
+                    continue
+
+                _, created = Membro.objects.update_or_create(
+                    dm_id=dm_id,
+                    defaults={'nome': nome, 'status': 'REGULAR'}
+                )
+
+                if created: criados += 1
+                else: atualizados += 1
+            
+            LogSistema.objects.create(
+                usuario=request.user,
+                acao="Importação de Membros",
+                detalhes=f"Importou CSV. {criados} novos, {atualizados} atualizados.",
+                ip_address=request.META.get('REMOTE_ADDR')
+            )
+
+            return Response({
+                "mensagem": "Importação concluída!",
+                "detalhes": f"{criados} membros cadastrados e {atualizados} verificados."
+            }, status=200)
+
+        except UnicodeDecodeError:
+            return Response({"erro": "Erro de codificação. Salve como CSV UTF-8."}, status=400)
+        except Exception as e:
+            return Response({"erro": f"Erro interno: {str(e)}"}, status=500)
 
 # ==============================================================================
-# 4. DASHBOARD (ESTATÍSTICAS)
+# 4. DASHBOARD
 # ==============================================================================
-
 class DashboardView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        # 1. Totais Gerais
-        total_entradas = Transacao.objects.filter(tipo='ENTRADA').aggregate(Sum('valor'))['valor__sum'] or 0
-        total_saidas = Transacao.objects.filter(tipo='SAIDA').aggregate(Sum('valor'))['valor__sum'] or 0
-        saldo_atual = total_entradas - total_saidas
+        # 1. Filtros da Requisição
+        hoje = datetime.now()
+        ano_selecionado = request.GET.get('ano', hoje.year)
+        mes_selecionado = request.GET.get('mes', None) # Se vier vazio, é ANUAL
 
-        # 2. Gráfico Pizza
-        por_categoria = Transacao.objects.values('categoria').annotate(total=Sum('valor')).order_by('-total')
+        # 2. Base Queryset (Filtra pelo Ano primeiro)
+        # Convertemos para int para evitar erro, se falhar usa o ano atual
+        try:
+            ano_selecionado = int(ano_selecionado)
+        except:
+            ano_selecionado = hoje.year
 
-        # 3. Gráfico Linha (Fluxo)
-        fluxo_mensal = Transacao.objects.annotate(
-            mes=TruncMonth('data_transacao')
-        ).values('mes', 'tipo').annotate(total=Sum('valor')).order_by('mes')
+        transacoes_ano = Transacao.objects.filter(data_transacao__year=ano_selecionado)
 
-        # 4. Recentes
-        ultimas = Transacao.objects.all().order_by('-data_transacao')[:5]
+        # Se tiver mês selecionado, filtra o mês também
+        if mes_selecionado:
+            try:
+                mes_int = int(mes_selecionado)
+                transacoes_filtro = transacoes_ano.filter(data_transacao__month=mes_int)
+                # Agrupamento por DIA
+                trunc_func = TruncDay('data_transacao')
+            except:
+                transacoes_filtro = transacoes_ano
+                trunc_func = TruncMonth('data_transacao')
+        else:
+            transacoes_filtro = transacoes_ano
+            # Agrupamento por MÊS (Visão Anual)
+            trunc_func = TruncMonth('data_transacao')
+
+        # 3. Totais (Baseados no Filtro Atual)
+        total_entradas = transacoes_filtro.filter(tipo='ENTRADA').aggregate(Sum('valor'))['valor__sum'] or 0
+        total_saidas = transacoes_filtro.filter(tipo='SAIDA').aggregate(Sum('valor'))['valor__sum'] or 0
+        saldo_total = total_entradas - total_saidas
+
+        # 4. Potes (Sempre baseados no saldo acumulado do filtro ou geral? 
+        # Geralmente saldo é "foto do momento", mas aqui faremos baseado no filtro para bater com o gráfico)
+        cats_filantropia = ['FIL', 'CAM', 'DOACAO'] 
+        ent_fil = transacoes_filtro.filter(tipo='ENTRADA', categoria__in=cats_filantropia).aggregate(Sum('valor'))['valor__sum'] or 0
+        sai_fil = transacoes_filtro.filter(tipo='SAIDA', categoria__in=cats_filantropia).aggregate(Sum('valor'))['valor__sum'] or 0
+        saldo_filantropia = ent_fil - sai_fil
+        saldo_adm = saldo_total - saldo_filantropia
+
+        # 5. Gráficos
+        por_categoria = transacoes_filtro.values('categoria').annotate(total=Sum('valor')).order_by('-total')
+
+        # Fluxo (A Mágica: muda entre Dia e Mês dependendo do filtro)
+        fluxo = transacoes_filtro.annotate(
+            data_ref=trunc_func
+        ).values('data_ref', 'tipo').annotate(total=Sum('valor')).order_by('data_ref')
+
+        # 6. Recentes (Do filtro atual)
+        ultimas = transacoes_filtro.order_by('-data_transacao')[:5]
         ultimas_serializer = TransacaoSerializer(ultimas, many=True)
+
+        # 7. Lista de Anos Disponíveis (Para o Dropdown)
+        anos_disponiveis = Transacao.objects.annotate(year=ExtractYear('data_transacao')).values_list('year', flat=True).distinct().order_by('-year')
+        # Garante que o ano atual esteja na lista mesmo se não tiver transação
+        lista_anos = list(anos_disponiveis)
+        if hoje.year not in lista_anos:
+            lista_anos.insert(0, hoje.year)
 
         return Response({
             "cards": {
-                "saldo": saldo_atual,
+                "saldo": saldo_total,
                 "entradas": total_entradas,
-                "saidas": total_saidas
+                "saidas": total_saidas,
+                "saldo_adm": saldo_adm,
+                "saldo_filantropia": saldo_filantropia
             },
             "graficos": {
                 "por_categoria": por_categoria,
-                "fluxo_mensal": fluxo_mensal
+                "fluxo": fluxo # Renomeei de fluxo_mensal para fluxo (pois pode ser diario)
             },
-            "recentes": ultimas_serializer.data
+            "recentes": ultimas_serializer.data,
+            "meta": {
+                "anos_disponiveis": lista_anos,
+                "ano_atual": ano_selecionado,
+                "mes_atual": mes_selecionado
+            }
         })
 
 # ==============================================================================
 # 5. RELATÓRIOS PDF
 # ==============================================================================
-
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def relatorio_pdf(request):
@@ -205,44 +318,10 @@ def relatorio_pdf(request):
 def relatorio_logs_view(request):
     return gerar_relatorio_logs(request)
 
-
 # ==============================================================================
 # 6. CONFIGURAÇÕES DO SISTEMA
 # ==============================================================================
 class ConfiguracaoViewSet(viewsets.ViewSet):
-    """
-    ViewSet especial que sempre retorna o objeto de ID 1.
-    """
-    permission_classes = [permissions.IsAuthenticated]
-
-    def list(self, request):
-        # Pega a config ou cria a padrão se não existir
-        config, _ = Configuracao.objects.get_or_create(pk=1)
-        serializer = ConfiguracaoSerializer(config)
-        return Response(serializer.data)
-
-    def create(self, request):
-        # Funciona como um Update (sempre no ID 1)
-        config, _ = Configuracao.objects.get_or_create(pk=1)
-        serializer = ConfiguracaoSerializer(config, data=request.data, partial=True)
-        if serializer.is_valid():
-            serializer.save()
-            
-            # Log de Auditoria
-            LogSistema.objects.create(
-                usuario=request.user,
-                acao="Alterou Configurações",
-                detalhes="Atualizou parâmetros do sistema",
-                ip_address=request.META.get('REMOTE_ADDR')
-            )
-            
-            return Response(serializer.data)
-        return Response(serializer.errors, status=400)
-    
-class ConfiguracaoViewSet(viewsets.ViewSet):
-    """
-    ViewSet singleton para Configurações Globais.
-    """
     permission_classes = [permissions.IsAuthenticated]
 
     def list(self, request):
@@ -255,7 +334,6 @@ class ConfiguracaoViewSet(viewsets.ViewSet):
         serializer = ConfiguracaoSerializer(config, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
-            
             LogSistema.objects.create(
                 usuario=request.user,
                 acao="Alterou Configurações",
@@ -265,35 +343,32 @@ class ConfiguracaoViewSet(viewsets.ViewSet):
             return Response(serializer.data)
         return Response(serializer.errors, status=400)
 
-    # --- NOVA AÇÃO: REAJUSTAR VALORES ---
     @action(detail=False, methods=['post'])
     def aplicar_reajuste(self, request):
-        """
-        Pega o valor atual da configuração e aplica a todas as mensalidades
-        que ainda não foram pagas.
-        """
         config = Configuracao.objects.get(pk=1)
         novo_valor = config.valor_mensalidade
-        
-        # Filtra apenas o que NÃO foi pago
         afetados = Mensalidade.objects.filter(paga=False)
         total_afetados = afetados.count()
         
         if total_afetados == 0:
             return Response({"mensagem": "Nenhuma mensalidade em aberto para atualizar."}, status=200)
 
-        # Atualiza o banco
         afetados.update(valor=novo_valor)
-
-        # Gera Log
         LogSistema.objects.create(
             usuario=request.user,
             acao="Reajuste de Mensalidades",
             detalhes=f"Atualizou {total_afetados} mensalidades em aberto para R$ {novo_valor}",
             ip_address=request.META.get('REMOTE_ADDR')
         )
-
         return Response({
             "mensagem": "Sucesso!",
             "detalhes": f"{total_afetados} mensalidades foram atualizadas para R$ {novo_valor}"
         }, status=200)
+
+# ==============================================================================
+# 7. EVENTOS (NOVO)
+# ==============================================================================
+class EventoViewSet(viewsets.ModelViewSet):
+    queryset = Evento.objects.all().order_by('-data_evento')
+    serializer_class = EventoSerializer
+    permission_classes = [permissions.IsAuthenticated]

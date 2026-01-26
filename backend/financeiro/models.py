@@ -29,9 +29,35 @@ class MetodoPagamento(models.TextChoices):
     BOLETO = 'BOL', 'Boleto'
     TRANSFERENCIA = 'TRANS', 'Transferência'
 
+class StatusEvento(models.TextChoices):
+    ATIVO = 'ATIVO', 'Em Andamento'
+    CONCLUIDO = 'CONCLUIDO', 'Concluído'
+
 # ==============================================================================
-# 2. MODELOS
+# 2. MODELOS NOVOS E ATUALIZADOS
 # ==============================================================================
+
+# [NOVO MODELO] EVENTO
+class Evento(models.Model):
+    nome = models.CharField(max_length=150)
+    data_evento = models.DateField(blank=True, null=True)
+    descricao = models.TextField(blank=True, null=True)
+    status = models.CharField(
+        max_length=20, 
+        choices=StatusEvento.choices, 
+        default=StatusEvento.ATIVO
+    )
+
+    class Meta:
+        verbose_name = "Evento"
+        verbose_name_plural = "Eventos"
+        ordering = ['-data_evento']
+
+    def __str__(self):
+        return f"{self.nome} ({self.get_status_display()})"
+
+
+# [MODELO ATUALIZADO] TRANSAÇÃO
 class Transacao(models.Model):
     tipo = models.CharField(max_length=15, choices=TipoTransacao.choices)
     valor = models.DecimalField(max_digits=12, decimal_places=2)
@@ -48,7 +74,17 @@ class Transacao(models.Model):
         null=True, 
         related_name='transacoes'
     )
+    
     comprovante = models.FileField(upload_to='comprovantes/', blank=True, null=True)
+
+    # [NOVO CAMPO] Vínculo com Evento (Opcional)
+    evento = models.ForeignKey(
+        Evento, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name='transacoes'
+    )
 
     class Meta:
         verbose_name = "Transação"
@@ -59,6 +95,9 @@ class Transacao(models.Model):
         return f"{self.get_tipo_display()} - {self.nome} (R$ {self.valor})"
 
 
+# ==============================================================================
+# 3. OUTROS MODELOS (MANTIDOS IGUAIS)
+# ==============================================================================
 
 class LogSistema(models.Model):
     usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)

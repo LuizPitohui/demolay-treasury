@@ -3,10 +3,11 @@ from reportlab.lib.pagesizes import A4
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
+from reportlab.pdfgen import canvas
 from django.http import HttpResponse
 from django.db.models import Sum
 # ADICIONADO: Import do Model Configuracao
-from .models import Transacao, LogSistema, Configuracao 
+from .models import Transacao, LogSistema, Configuracao, Mensalidade
 from datetime import datetime, date
 import os
 import calendar
@@ -307,4 +308,79 @@ def gerar_relatorio_logs(request):
     elements.append(ass_table)
 
     doc.build(elements)
+    return response
+
+# --- RELATÓRIO: RECIBO INDIVIDUAL ---
+def gerar_recibo_mensalidade(request, pk):
+    try:
+        mensalidade = Mensalidade.objects.get(pk=pk, paga=True)
+    except Mensalidade.DoesNotExist:
+        return HttpResponse("Erro: Mensalidade não encontrada ou não paga.", status=404)
+
+    # Configuração Dinâmica
+    nome_capitulo = get_nome_capitulo()
+
+    response = HttpResponse(content_type='application/pdf')
+    filename = f"Recibo_{mensalidade.membro.nome}_{mensalidade.mes_referencia.strftime('%m-%Y')}.pdf"
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+
+    # Tamanho A5 paisagem (bom para recibos)
+    c = canvas.Canvas(response, pagesize=(21*cm, 14.8*cm)) 
+    width, height = (21*cm, 14.8*cm)
+
+    # Borda Decorativa
+    c.setStrokeColor(colors.darkblue)
+    c.setLineWidth(3)
+    c.rect(1*cm, 1*cm, width-2*cm, height-2*cm)
+
+    # Cabeçalho
+    c.setFont("Helvetica-Bold", 16)
+    c.setFillColor(colors.darkblue)
+    c.drawCentredString(width/2, height - 2.5*cm, nome_capitulo.upper())
+    
+    c.setFont("Helvetica", 10)
+    c.setFillColor(colors.black)
+    c.drawCentredString(width/2, height - 3*cm, "ORDEM DEMOLAY")
+
+    c.setFont("Helvetica-Bold", 24)
+    c.drawCentredString(width/2, height - 4.5*cm, "RECIBO DE MENSALIDADE")
+
+    # Corpo do Recibo
+    y = height - 6.5*cm
+    c.setFont("Helvetica", 12)
+    
+    texto = f"Recebemos de {mensalidade.membro.nome}"
+    c.drawString(2*cm, y, texto)
+    
+    y -= 1*cm
+    texto_valor = f"A importância de R$ {mensalidade.valor:,.2f}"
+    c.drawString(2*cm, y, texto_valor)
+
+    y -= 1*cm
+    mes_extenso = mensalidade.mes_referencia.strftime("%B de %Y").capitalize()
+    texto_ref = f"Referente à Mensalidade de: {mes_extenso}"
+    c.drawString(2*cm, y, texto_ref)
+
+    # Data e Assinatura
+    data_pagamento = mensalidade.data_pagamento.strftime("%d/%m/%Y") if mensalidade.data_pagamento else datetime.now().strftime("%d/%m/%Y")
+    
+    c.setFont("Helvetica", 10)
+    c.drawRightString(width - 2*cm, 3.5*cm, f"Manaus, {data_pagamento}")
+
+    c.line(width - 8*cm, 2*cm, width - 2*cm, 2*cm)
+    c.setFont("Helvetica-Bold", 8)
+    c.drawCentredString(width - 5*cm, 1.5*cm, "TESOUREIRO")
+
+    # Marca d'água de "PAGO"
+    c.saveState()
+    c.translate(width/2, height/2)
+    c.rotate(45)
+    c.setFillColor(colors.lightgrey)
+    c.setFont("Helvetica-Bold", 80)
+    c.setFillAlpha(0.3)
+    c.drawCentredString(0, 0, "PAGO")
+    c.restoreState()
+
+    c.showPage()
+    c.save()
     return response

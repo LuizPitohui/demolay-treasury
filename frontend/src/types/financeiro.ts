@@ -1,11 +1,10 @@
 export interface Transacao {
     id: number;
     tipo: 'ENTRADA' | 'SAIDA';
-    tipo_display: string;
-    categoria_display: string;
-    valor: string;
+    valor: number;
     nome: string;
-    descricao: string;
+    categoria: string;
+    categoria_display: string;
     data_transacao: string;
     responsavel_nome: string;
 }
@@ -15,10 +14,13 @@ export interface DashboardData {
         saldo: number;
         entradas: number;
         saidas: number;
+        // --- NOVOS CAMPOS ---
+        saldo_adm: number;
+        saldo_filantropia: number;
     };
     graficos: {
-        por_categoria: Array<{ categoria: string; total: number }>;
-        fluxo_mensal: Array<{ mes: string; tipo: string; total: number }>;
+        por_categoria: any[];
+        fluxo_mensal: any[];
     };
     recentes: Transacao[];
 }

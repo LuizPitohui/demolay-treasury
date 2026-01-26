@@ -6,22 +6,28 @@ from .views import (
     TransacaoViewSet, 
     LogSistemaViewSet,
     MembroViewSet,
-    ConfiguracaoViewSet,    # <--- [ADICIONAR] Importante para a tela de settings
+    ConfiguracaoViewSet,
+    EventoViewSet,  # <--- 1. IMPORT NOVO
     DashboardView, 
-    relatorio_pdf, 
     HealthCheckView,
-    relatorio_logs_view
 )
+
+from .reports import (
+    gerar_relatorio_mensal, 
+    gerar_relatorio_logs, 
+    gerar_recibo_mensalidade
+) 
 
 router = DefaultRouter()
 router.register(r'transacoes', TransacaoViewSet, basename='transacao')
 router.register(r'logs', LogSistemaViewSet, basename='logs')
 router.register(r'membros', MembroViewSet, basename='membros')
-router.register(r'configuracao', ConfiguracaoViewSet, basename='configuracao') # <--- [ADICIONAR] Registra a rota
+router.register(r'configuracao', ConfiguracaoViewSet, basename='configuracao')
+router.register(r'eventos', EventoViewSet, basename='eventos') # <--- 2. ROTA NOVA
 
 urlpatterns = [
     # ==========================================================
-    # 1. ROTAS ESPECÍFICAS (DEVEM VIR PRIMEIRO)
+    # 1. ROTAS ESPECÍFICAS
     # ==========================================================
     
     # Autenticação
@@ -30,13 +36,17 @@ urlpatterns = [
     # Status
     path('health/', HealthCheckView.as_view(), name='health-check'),
 
-    # Relatórios PDF
-    path('logs/pdf/', relatorio_logs_view, name='logs-pdf'),
-    path('relatorio/pdf/', relatorio_pdf, name='relatorio-pdf'),
+    # Relatórios PDF e Dashboard
+    path('logs/pdf/', gerar_relatorio_logs, name='logs-pdf'),
+    path('relatorio/pdf/', gerar_relatorio_mensal, name='relatorio-pdf'),
+    
+    # Recibo
+    path('recibo/<int:pk>/', gerar_recibo_mensalidade, name='recibo-pdf'),
+
     path('dashboard/', DashboardView.as_view(), name='dashboard-data'),
 
     # ==========================================================
-    # 2. ROTAS GENÉRICAS (ROUTER) - FICAM POR ÚLTIMO
+    # 2. ROTAS GENÉRICAS (ROUTER)
     # ==========================================================
     path('', include(router.urls)),
 ]

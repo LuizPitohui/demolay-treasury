@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import api from '@/services/api'; 
-import { X, FileText, Download, Loader2 } from 'lucide-react'; // Adicionei Loader2
+import { X, FileText, Download, Loader2 } from 'lucide-react';
 
 interface ModalProps {
   isOpen: boolean;
@@ -13,7 +13,7 @@ export default function ReportModal({ isOpen, onClose }: ModalProps) {
   const dataAtual = new Date();
   const [mes, setMes] = useState(dataAtual.getMonth() + 1);
   const [ano, setAno] = useState(dataAtual.getFullYear());
-  const [loading, setLoading] = useState(false); // NOVO: Estado de loading
+  const [loading, setLoading] = useState(false);
 
   if (!isOpen) return null;
 
@@ -29,12 +29,10 @@ export default function ReportModal({ isOpen, onClose }: ModalProps) {
   const handleDownload = async () => {
     setLoading(true);
     try {
-      // 1. Usa o axios (api) que já tem o Token configurado
       const response = await api.get(`/relatorio/pdf/?mes=${mes}&ano=${ano}`, {
-        responseType: 'blob', // Importante: Diz que é um arquivo binário
+        responseType: 'blob',
       });
 
-      // 2. Cria o link invisível para download
       const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = blobUrl;
@@ -58,32 +56,36 @@ export default function ReportModal({ isOpen, onClose }: ModalProps) {
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose}></div>
 
-      <div className="relative w-full max-w-sm bg-[#0f172a] border border-white/10 rounded-2xl shadow-2xl animate-in fade-in zoom-in duration-200">
+      <div className="relative w-full max-w-sm shadow-2xl animate-in fade-in zoom-in duration-200 rounded-2xl border
+        bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
         
         {/* Cabeçalho */}
-        <div className="flex items-center justify-between p-6 border-b border-white/5 bg-white/5">
-          <h2 className="text-xl font-bold text-white flex items-center gap-2">
-            <FileText className="w-5 h-5 text-blue-400" /> Relatório Mensal
+        <div className="flex items-center justify-between p-6 border-b 
+            bg-slate-50 border-slate-200 dark:bg-white/5 dark:border-white/5 rounded-t-2xl">
+          <h2 className="text-xl font-bold flex items-center gap-2 text-slate-800 dark:text-white">
+            <FileText className="w-5 h-5 text-blue-500" /> Relatório Mensal
           </h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors">
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Corpo */}
         <div className="p-6 space-y-4">
-          <p className="text-slate-400 text-sm mb-4">
+          <p className="text-sm mb-4 text-slate-600 dark:text-slate-400">
             Selecione o período para gerar o balancete oficial com saldo anterior e histórico.
           </p>
 
           <div className="grid grid-cols-2 gap-4">
             {/* Seletor de Mês */}
             <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1 uppercase">Mês</label>
+              <label className="block text-xs font-bold mb-1 uppercase text-slate-500 dark:text-slate-400">Mês</label>
               <select 
                 value={mes}
                 onChange={(e) => setMes(Number(e.target.value))}
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-3 text-white focus:outline-none focus:border-blue-500/50 [&>option]:bg-slate-800"
+                className="w-full rounded-xl px-3 py-3 outline-none border transition-colors
+                bg-slate-50 border-slate-200 text-slate-800 focus:border-blue-500
+                dark:bg-slate-800 dark:border-slate-700 dark:text-white dark:focus:border-blue-500"
               >
                 {meses.map((m) => (
                   <option key={m.v} value={m.v}>{m.n}</option>
@@ -93,11 +95,13 @@ export default function ReportModal({ isOpen, onClose }: ModalProps) {
 
             {/* Seletor de Ano */}
             <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1 uppercase">Ano</label>
+              <label className="block text-xs font-bold mb-1 uppercase text-slate-500 dark:text-slate-400">Ano</label>
               <select 
                 value={ano}
                 onChange={(e) => setAno(Number(e.target.value))}
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-3 text-white focus:outline-none focus:border-blue-500/50 [&>option]:bg-slate-800"
+                className="w-full rounded-xl px-3 py-3 outline-none border transition-colors
+                bg-slate-50 border-slate-200 text-slate-800 focus:border-blue-500
+                dark:bg-slate-800 dark:border-slate-700 dark:text-white dark:focus:border-blue-500"
               >
                 {anos.map((a) => (
                   <option key={a} value={a}>{a}</option>
