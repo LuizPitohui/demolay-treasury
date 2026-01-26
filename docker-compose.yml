@@ -1,9 +1,9 @@
 version: '3.8'
 
 services:
-  # 1. Banco de Dados (Mantém igual)
   db:
     image: postgres:15-alpine
+    restart: always  # <--- Adicione isso
     volumes:
       - postgres_data:/var/lib/postgresql/data
     env_file:
@@ -11,28 +11,26 @@ services:
     ports:
       - "5432:5432"
 
-  # 2. Backend Django (Agora na 8050)
   backend:
     build: ./backend
-    # O Gunicorn continua rodando na 8000 DENTRO do container
+    restart: always  # <--- Adicione isso
     command: sh -c "python manage.py collectstatic --noinput && python manage.py migrate && gunicorn core.wsgi:application --bind 0.0.0.0:8000"
     volumes:
       - ./backend:/app
       - static_volume:/app/staticfiles
       - media_volume:/app/media
     ports:
-      # LADO DE FORA (8050) : LADO DE DENTRO (8000)
       - "8050:8000"
     env_file:
       - .env
     depends_on:
       - db
 
-  # 3. Frontend Next.js (Agora na 8051)
   frontend:
-    build: ./frontend
+    build: 
+      context: ./frontend
+    restart: always  # <--- Adicione isso
     ports:
-      # LADO DE FORA (8051) : LADO DE DENTRO (3000)
       - "8051:3000"
     env_file:
       - .env

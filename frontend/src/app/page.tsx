@@ -148,7 +148,7 @@ const GraficosSection = memo(({ data, COLORS, viewMode }: any) => {
               <Tooltip 
                 contentStyle={{backgroundColor: tooltipBg, borderColor: tooltipBorder, borderRadius: '12px', color: tooltipText, boxShadow: '0 10px 30px -5px rgba(0, 0, 0, 0.1)'}} 
                 itemStyle={{color: tooltipText, fontWeight: 'bold'}}
-                formatter={(value: number) => [`R$ ${value.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`]}
+                formatter={(value: any) => [`R$ ${Number(value || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}`]}
                 labelFormatter={(label) => new Date(label).toLocaleDateString('pt-BR', {day: '2-digit', month: 'long', timeZone: 'UTC'})}
               />
               <Legend verticalAlign="top" height={36} iconType="circle"/>
@@ -178,7 +178,7 @@ const GraficosSection = memo(({ data, COLORS, viewMode }: any) => {
               <Tooltip 
                 contentStyle={{backgroundColor: tooltipBg, borderColor: tooltipBorder, borderRadius: '10px'}} 
                 itemStyle={{color: tooltipText}}
-                formatter={(val: number) => `R$ ${val.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`} 
+                formatter={(val: any) => `R$ ${Number(val || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}`} 
               />
               <Legend iconType="circle" layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{fontSize: '11px', color: axisColor}} />
             </PieChart>

@@ -1,5 +1,5 @@
-# Usa Node.js Alpine (versão leve)
-FROM node:18-alpine
+# MUDANÇA AQUI: Usando Node 24 (Bleeding Edge)
+FROM node:24-alpine
 
 # Define diretório de trabalho
 WORKDIR /app
